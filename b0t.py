@@ -15,6 +15,9 @@ def start_script():
     global stop_script_flag
     stop_script_flag = False
 
+    # Desativa os campos de entrada
+    set_entry_state("disable")
+
     script_thread = threading.Thread(target=run_script)
     script_thread.start()
 
@@ -28,19 +31,34 @@ def run_script():
         inter_cycle_delay = float(inter_cycle_delay_entry.get())
 
         current_config_label.config(text=f"Letras pré-definidas: {', '.join(letters)}")
-        progress_text.config(state=tk.NORMAL)
-        progress_text.delete(1.0, tk.END)
 
-        start_time = time.time()
+        # Configuração da barra de progresso
+        progress_bar_var.set(0)
+        progress_bar.config(mode="determinate", maximum=inter_cycle_delay * 1000)  # em milissegundos
+
         while not stop_script_flag:
-            press_keys_once(letters, delay_letter)
-            update_progress_bar(inter_cycle_delay, start_time)
+            start_time = time.time()
+            cycle_start_time = start_time
 
-            inner_start_time = time.time()
-            while time.time() - inner_start_time < x_press_duration and not stop_script_flag:
-                keyboard_ctrl.press('x')
-                time.sleep(delay_x)
-                keyboard_ctrl.release('x')
+            while time.time() - cycle_start_time < inter_cycle_delay and not stop_script_flag:
+                press_keys_once(letters, delay_letter)
+                root.update_idletasks()
+
+                inner_start_time = time.time()
+                while time.time() - inner_start_time < x_press_duration and not stop_script_flag:
+                    keyboard_ctrl.press('x')
+                    time.sleep(delay_x)
+                    keyboard_ctrl.release('x')
+                    root.update_idletasks()
+
+                # Atualiza a barra de progresso
+                elapsed_time = time.time() - cycle_start_time
+                progress_bar_var.set(elapsed_time * 1000)  # em milissegundos
+                root.update_idletasks()
+
+            # Se o script não foi interrompido, reinicia a barra de progresso
+            if not stop_script_flag:
+                progress_bar_var.set(0)
 
     except KeyboardInterrupt:
         print("Script interrompido pelo usuário.")
@@ -48,15 +66,8 @@ def run_script():
     finally:
         stop_script_button.config(state=tk.DISABLED)
         start_script_button.config(state=tk.NORMAL)
-
-def update_progress_bar(duration, start_time):
-    current_time = time.time() - start_time
-    progress_percent = min(current_time / duration, 1.0)
-    progress_width = int(progress_percent * 40)  # Ajuste conforme necessário
-    progress_text.delete(1.0, tk.END)
-    progress_text.insert(tk.END, "[" + "#" * progress_width + "-" * (40 - progress_width) + "]")
-    progress_text.config(state=tk.DISABLED)
-    root.update_idletasks()
+        # Ativa os campos de entrada após a conclusão do script
+        set_entry_state("normal")
 
 def stop_script():
     global stop_script_flag
@@ -64,6 +75,15 @@ def stop_script():
 
     stop_script_button.config(state=tk.DISABLED)
     start_script_button.config(state=tk.NORMAL)
+    # Ativa os campos de entrada ao parar o script
+    set_entry_state("normal")
+
+def set_entry_state(state):
+    letter_entry.config(state=state)
+    delay_letter_entry.config(state=state)
+    delay_x_entry.config(state=state)
+    x_duration_entry.config(state=state)
+    inter_cycle_delay_entry.config(state=state)
 
 root = tk.Tk()
 root.title("Script Automático")
@@ -100,8 +120,10 @@ inter_cycle_delay_entry.pack(pady=5)
 current_config_label = tk.Label(root, text="Letras pré-definidas: e, 4, 2, 5, L, K, J, H", bg="#f5f5f5")
 current_config_label.pack(pady=10)
 
-progress_text = tk.Text(root, height=1, width=40, state=tk.DISABLED)
-progress_text.pack(pady=10)
+# Barra de progresso
+progress_bar_var = tk.IntVar()
+progress_bar = ttk.Progressbar(root, variable=progress_bar_var, mode='determinate')
+progress_bar.pack(pady=10)
 
 start_script_button = tk.Button(root, text="Iniciar", command=start_script)
 start_script_button.pack(pady=20)
