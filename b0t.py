@@ -1,134 +1,129 @@
 import tkinter as tk
 from tkinter import ttk
-import threading
+import math
 import time
 from pynput import keyboard
 from pynput.keyboard import Controller
 
 def press_keys_once(keys, delay):
+    # Pressiona as teclas da lista uma vez cada
     for key in keys:
         keyboard_ctrl.press(key)
         keyboard_ctrl.release(key)
         time.sleep(delay)
+        update_progress_bar()
 
 def start_script():
-    global stop_script_flag
-    stop_script_flag = False
-
-    # Desativa os campos de entrada
-    set_entry_state("disable")
-
-    script_thread = threading.Thread(target=run_script)
-    script_thread.start()
-
-def run_script():
-    global stop_script_flag
     try:
+        # Obtém os valores dos campos de entrada
         letters = letter_entry.get().lower().split(',')
         delay_letter = float(delay_letter_entry.get())
         delay_x = float(delay_x_entry.get())
         x_press_duration = float(x_duration_entry.get())
         inter_cycle_delay = float(inter_cycle_delay_entry.get())
 
+        # Exibe as letras pré-definidas
         current_config_label.config(text=f"Letras pré-definidas: {', '.join(letters)}")
 
-        # Configuração da barra de progresso
-        progress_bar_var.set(0)
-        progress_bar.config(mode="determinate", maximum=inter_cycle_delay * 1000)  # em milissegundos
-
         while not stop_script_flag:
+            # Executa a primeira parte do ciclo
+            press_keys_once(letters, delay_letter)
+
+            # Loop de duração definida pressionando apenas 'X'
             start_time = time.time()
-            cycle_start_time = start_time
+            while time.time() - start_time < x_press_duration and not stop_script_flag:
+                keyboard_ctrl.press('x')
+                time.sleep(delay_x)
+                keyboard_ctrl.release('x')
+                update_progress_bar()
 
-            while time.time() - cycle_start_time < inter_cycle_delay and not stop_script_flag:
-                press_keys_once(letters, delay_letter)
-                root.update_idletasks()
-
-                inner_start_time = time.time()
-                while time.time() - inner_start_time < x_press_duration and not stop_script_flag:
-                    keyboard_ctrl.press('x')
-                    time.sleep(delay_x)
-                    keyboard_ctrl.release('x')
-                    root.update_idletasks()
-
-                # Atualiza a barra de progresso
-                elapsed_time = time.time() - cycle_start_time
-                progress_bar_var.set(elapsed_time * 1000)  # em milissegundos
-                root.update_idletasks()
-
-            # Se o script não foi interrompido, reinicia a barra de progresso
-            if not stop_script_flag:
-                progress_bar_var.set(0)
+            # Aguarda o tempo definido antes de reiniciar o ciclo
+            sleep_with_progress_bar(inter_cycle_delay)
 
     except KeyboardInterrupt:
         print("Script interrompido pelo usuário.")
 
     finally:
-        stop_script_button.config(state=tk.DISABLED)
+        # Reativar botão de iniciar
         start_script_button.config(state=tk.NORMAL)
-        # Ativa os campos de entrada após a conclusão do script
-        set_entry_state("normal")
+        stop_script_button.config(state=tk.DISABLED)
 
-def stop_script():
-    global stop_script_flag
-    stop_script_flag = True
+def sleep_with_progress_bar(duration):
+    for _ in range(int(duration)):
+        time.sleep(1)
+        update_progress_bar()
 
-    stop_script_button.config(state=tk.DISABLED)
-    start_script_button.config(state=tk.NORMAL)
-    # Ativa os campos de entrada ao parar o script
-    set_entry_state("normal")
+def update_progress_bar():
+    current_time = time.time() - start_script_time
+    progress_value = min(current_time / script_duration, 1.0) * 100
+    progress_bar_var.set(progress_value)
+    root.update_idletasks()
 
-def set_entry_state(state):
-    letter_entry.config(state=state)
-    delay_letter_entry.config(state=state)
-    delay_x_entry.config(state=state)
-    x_duration_entry.config(state=state)
-    inter_cycle_delay_entry.config(state=state)
-
+# Cria a janela principal
 root = tk.Tk()
 root.title("Script Automático")
 root.geometry("400x500")
 root.configure(bg="#f5f5f5")
 
+# Criar um controlador de teclado global
 keyboard_ctrl = Controller()
 
+# Labels e campos de entrada
 tk.Label(root, text="Letras (separadas por vírgula):", bg="#f5f5f5").pack()
 letter_entry = tk.Entry(root)
-letter_entry.insert(0, 'e,4,2,5,L,K,J,H')
+letter_entry.insert(0, 'e,4,2,5,L,K,J,H')  # Valores iniciais
 letter_entry.pack(pady=5)
 
 tk.Label(root, text="Atraso entre letras (segundos):", bg="#f5f5f5").pack()
 delay_letter_entry = tk.Entry(root)
-delay_letter_entry.insert(0, '1.6')
+delay_letter_entry.insert(0, '1.6')  # Valor inicial
 delay_letter_entry.pack(pady=5)
 
 tk.Label(root, text="Atraso para 'X' (segundos):", bg="#f5f5f5").pack()
 delay_x_entry = tk.Entry(root)
-delay_x_entry.insert(0, '1.6')
+delay_x_entry.insert(0, '1.6')  # Valor inicial
 delay_x_entry.pack(pady=5)
 
 tk.Label(root, text="Duração do pressionamento de 'X' (segundos):", bg="#f5f5f5").pack()
 x_duration_entry = tk.Entry(root)
-x_duration_entry.insert(0, '10')
+x_duration_entry.insert(0, '10')  # Valor inicial
 x_duration_entry.pack(pady=5)
 
 tk.Label(root, text="Atraso entre ciclos (segundos):", bg="#f5f5f5").pack()
 inter_cycle_delay_entry = tk.Entry(root)
-inter_cycle_delay_entry.insert(0, '120')
+inter_cycle_delay_entry.insert(0, '120')  # Valor inicial
 inter_cycle_delay_entry.pack(pady=5)
 
+# Caixa de texto para exibir as letras pré-definidas
 current_config_label = tk.Label(root, text="Letras pré-definidas: e, 4, 2, 5, L, K, J, H", bg="#f5f5f5")
 current_config_label.pack(pady=10)
 
 # Barra de progresso
-progress_bar_var = tk.IntVar()
-progress_bar = ttk.Progressbar(root, variable=progress_bar_var, mode='determinate')
-progress_bar.pack(pady=10)
+progress_bar_var = tk.DoubleVar()
+progress_bar = ttk.Progressbar(root, variable=progress_bar_var, maximum=100)
+progress_bar.pack(fill=tk.X, pady=10)
 
-start_script_button = tk.Button(root, text="Iniciar", command=start_script)
+# Botões de iniciar e parar com efeitos visuais
+start_script_button_style = ttk.Style()
+start_script_button_style.configure('TButton', foreground='white')
+start_script_button = ttk.Button(root, text="Iniciar", command=start_script, style='TButton')
 start_script_button.pack(pady=20)
 
-stop_script_button = tk.Button(root, text="Parar", command=stop_script, state=tk.DISABLED)
+stop_script_button_style = ttk.Style()
+stop_script_button_style.configure('TButton', foreground='white')
+stop_script_button = ttk.Button(root, text="Parar", command=lambda: stop_script_button.config(state=tk.DISABLED), style='TButton')
 stop_script_button.pack(pady=20)
 
+# Flag para controlar o script
+stop_script_flag = False
+
+# Variáveis para controle de tempo e duração do script
+start_script_time = time.time()
+script_duration = float("inf")  # Definido como infinito
+
+# Atualiza os efeitos visuais
+root.after(50, update_progress_bar)
+
+# Executa a aplicação
 root.mainloop()
+e
